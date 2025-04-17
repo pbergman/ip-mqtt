@@ -12,5 +12,3 @@ RUN apt update && apt install -y \
 ENV GO_VERSION=1.23.5
 RUN wget -qO- https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz | tar -xzC /usr/local
 RUN ln -s /usr/local/go/bin/go /usr/bin/go
-
-
