@@ -1,6 +1,7 @@
 .ONESHELL:
-DOCKER_IMAGE_NAME = debian-build-env
-DOCKER_BUILD_ARCH = mips64
+VERSION := $(shell git describe --tags --always --long)
+DOCKER_IMAGE_NAME := debian-build-env
+DOCKER_BUILD_ARCH := mips64
 
 docker-stop:
 	sudo docker stop $(DOCKER_IMAGE_NAME)-$(DOCKER_BUILD_ARCH)
@@ -25,7 +26,7 @@ docker-build:
 	sudo docker build --tag $(DOCKER_IMAGE_NAME):$(DOCKER_BUILD_ARCH) .
 
 build-go:
-	go build  -o ./build/ip-mqtt -ldflags '-s -w -extldflags "-static"' && mips64-linux-gnuabi64-strip ./build/ip-mqtt
+	go build  -o ./build/ip-mqtt -ldflags '-s -w -extldflags "-static" -X main.version=$(VERSION)' && mips64-linux-gnuabi64-strip ./build/ip-mqtt
 
 build-mips64le:
 	mkdir -p "./build"
@@ -84,7 +85,7 @@ write-deb-control:
 	mkdir -p ./build/src/DEBIAN
 	cat > ./build/src/DEBIAN/control <<EOF
 		Package: ip-mqtt
-		Version: 0.0.1
+		Version: $(VERSION)
 		Maintainer: Philip Bergman <pbergman@live.nl>
 		Architecture: mips
 		Description: network interface listener that will publish ip changes to mqtt server
@@ -103,7 +104,6 @@ write-deb-systemtd:
 		WantedBy=multi-user.target
 	EOF
 	sudo chmod 755 ./build/src/usr/share/ip-mqtt/ip-mqtt.service
-	# /src/etc/systemd/system/ip-mqtt.service
 
 build-deb: build write-deb-dirs write-deb-control write-deb-systemtd write-deb-postinst write-deb-prerm
 	set -e
@@ -111,7 +111,7 @@ build-deb: build write-deb-dirs write-deb-control write-deb-systemtd write-deb-p
 	cp ./config_example.conf ./build/src/usr/share/ip-mqtt/ip-mqtt.conf
 	cp ./build/ip-mqtt ./build/src/usr/local/bin/ip-mqtt
 	sudo chown root:root -R ./build/src
-	dpkg-deb --build ./build/src ./build/ip-mqtt.$(DOCKER_BUILD_ARCH).deb
+	dpkg-deb --build ./build/src ./build/ip-mqtt.$(DOCKER_BUILD_ARCH).$(VERSION).deb
 	sudo rm ./build/src -rf
 	sudo rm ./build/ip-mqtt
 

@@ -16,11 +16,21 @@ import (
 func init() {
 	flag.String("config", "/etc/ip-mqtt.conf", "config file")
 	flag.Bool("print-interface", false, "print available network interface")
+	flag.Bool("version", false, "print build version")
 }
+
+var (
+	version string
+)
 
 func main() {
 
 	flag.Parse()
+
+	if flag.Lookup("version").Value.(flag.Getter).Get().(bool) {
+		_, _ = fmt.Fprintf(os.Stdout, "version: %s\n", version)
+		os.Exit(0)
+	}
 
 	if flag.Lookup("print-interface").Value.(flag.Getter).Get().(bool) {
 		writerInterfaces()
