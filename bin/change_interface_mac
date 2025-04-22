@@ -1,0 +1,133 @@
+#!/bin/bash
+
+# A script that will stop, create a new mac address and start
+# interface again. By doing this on the WAN interface it will
+# generate a new public IP.
+#
+# For stopping/starting the interface it will use vyatta-cfg-cmd-wrapper
+# to control vyatta based systems (like EdgeOS). To generate new mac
+# address it will use macchanger which can be installed with apt on an
+# edge router by enabling debian repositories. See
+#
+#   https://help.uisp.com/hc/en-us/articles/22591219068055-EdgeRouter-Add-Debian-Packages-to-EdgeOS
+#
+
+
+export RESET
+export INTERFACE
+export VLAN
+export VYATTA_CMD=/opt/vyatta/sbin/vyatta-cfg-cmd-wrapper
+export MACCHANGER_CMD=/usr/bin/macchanger
+export DRY_RUN
+
+set -e
+
+function usage {
+  cat << EOF
+    usage: ${0##*/} [OPTS] <INTERFACE>
+
+    OPTIONS:
+      -d | --debug    enable debug mode
+      -n | --dry-run  do a dry run
+      -v | --vlan     set vlan for interface
+      -r | --reset    reset interface back to default mac and restart interface
+      -h | --help     print this helper
+EOF
+}
+
+function init {
+
+  if [ "$(apt -qq list macchanger 2>/dev/null | grep -o installed)" != "installed" ]; then
+     echo "macchanger not found"
+     exit 1
+  fi
+
+  local debug
+  # shellcheck disable=SC2155
+  local opts=$(getopt \
+    --longoptions "debug,vlan:,reset,dry-run,help" \
+    --name "$(basename "$0")" \
+    --options "hdrnv:" \
+    -- "$@"
+  )
+
+  eval set -- "$opts"
+
+  while true; do
+    case "$1" in
+      -d | --debug )    debug=true; shift ;;
+      -v | --vlan )     export VLAN="$2"; shift 2 ;;
+      -r | --reset )    export RESET=true; shift ;;
+      -n | --dry-run )  export DRY_RUN=true; shift ;;
+      -h | --help )     usage; exit 0; shift ;;
+      -- ) shift; break ;;
+      * ) break ;;
+    esac
+  done
+
+  if [ -n "$debug" ]; then
+      set -x
+  fi
+
+  for arg; do
+  	INTERFACE=$arg
+  done
+}
+
+function exec_macchanger {
+    args=("${MACCHANGER_CMD}" "-a" "${INTERFACE}")
+
+    if [ -z "$RESET" ]; then
+      args[1]="-r"
+    fi
+
+    if [ -z "$DRY_RUN" ]; then
+      # shellcheck disable=SC2068
+      ${args[@]}
+    else
+      echo "${args[@]}"
+    fi
+}
+
+function exec_vyatta {
+
+  local args=(
+    "set"
+    "interfaces"
+    "ethernet"
+    "${INTERFACE}"
+  )
+
+  if [ -n "$1" ]; then
+    args[0]="delete"
+  fi
+
+  if [ -n "$VLAN" ]; then
+    args+=("vif")
+    args+=("${VLAN}")
+  fi
+
+  args+=("disable")
+
+  $VYATTA_CMD begin
+  # shellcheck disable=SC2068
+  $VYATTA_CMD ${args[@]}
+
+  if [ -z "$DRY_RUN" ]; then
+    $VYATTA_CMD commit
+    $VYATTA_CMD save
+  else
+    $VYATTA_CMD discard
+  fi
+
+  $VYATTA_CMD end
+}
+
+function main {
+  init "$@"
+  exec_vyatta
+  exec_macchanger
+  exec_vyatta true
+}
+
+main "$@"

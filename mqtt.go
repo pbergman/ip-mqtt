@@ -95,6 +95,7 @@ func publish(app *App, ip net.IP, name string, protocol string, topic *Topic) er
 		QoS:     1,
 		Topic:   topic.GetPath(getTopicContext(name, protocol)),
 		Payload: []byte(ip.String()),
+		Retain:  true,
 	})
 
 	if err != nil {
